@@ -6,25 +6,6 @@
 static const unsigned int INT_RETRYTIMES = 3;
 static wchar_t *SZ_AGENT = L"Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.87 Safari/537.36";
 
-typedef struct WIN_HTTP_CLIENT
-{
-	wchar_t m_proxy[MAX_PATH];
-	wchar_t m_proxyUsername[50];
-	wchar_t m_proxyPassword[50];
-
-	wchar_t m_userAgent[50];
-	DWORD m_dwLastError;
-	BOOL m_requireValidSsl;
-
-	unsigned int m_resolveTimeout;
-	unsigned int m_connectTimeout;
-	unsigned int m_sendTimeout;
-	unsigned int m_receiveTimeout;
-
-}WinHttp, *LPWinHttp;
-
-WinHttp whpdata;
-
 void WinHttpUtilInit();
 void WinHttpUtilSetProxy(LPCWSTR szProxyHost, LPCWSTR szUsername, LPCWSTR szPassword);
 BOOL WinHttpUtilSetUserAgent(LPCWSTR szUserAgent);

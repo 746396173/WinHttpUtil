@@ -3,15 +3,33 @@
 #include <Winhttp.h>
 #pragma comment(lib, "Winhttp.lib")
 
+struct WIN_HTTP_CLIENT_
+{
+	wchar_t m_proxy[MAX_PATH];
+	wchar_t m_proxyUsername[128];
+	wchar_t m_proxyPassword[128];
+
+	wchar_t m_userAgent[512];
+	DWORD m_dwLastError;
+	BOOL m_requireValidSsl;
+
+	unsigned int m_resolveTimeout;
+	unsigned int m_connectTimeout;
+	unsigned int m_sendTimeout;
+	unsigned int m_receiveTimeout;
+
+}whpdata;
+
+
 /*
 * @Description: 加载基本设置
 */
 void WinHttpUtilInit()
 {
 	memset(whpdata.m_proxy, '\0', sizeof(whpdata.m_proxy));
-	wcscpy(whpdata.m_userAgent, SZ_AGENT);
-	wcscpy(whpdata.m_proxyUsername, L"");
-	wcscpy(whpdata.m_proxyPassword, L"");
+	lstrcpyn(whpdata.m_userAgent, SZ_AGENT, sizeof(whpdata.m_userAgent));
+	lstrcpyn(whpdata.m_proxyUsername, L"", sizeof(whpdata.m_proxyUsername));
+	lstrcpyn(whpdata.m_proxyPassword, L"", sizeof(whpdata.m_proxyPassword));
 
 	whpdata.m_requireValidSsl = FALSE; // In https, Accept any certificate while performing HTTPS request.
 	whpdata.m_dwLastError = 0;
@@ -28,16 +46,16 @@ void WinHttpUtilInit()
 */
 void WinHttpUtilSetProxy(LPCWSTR szProxyHost, LPCWSTR szUsername, LPCWSTR szPassword)
 {
-	wcscpy(whpdata.m_proxy, szProxyHost);
+	lstrcpyn(whpdata.m_proxy, szProxyHost, sizeof(whpdata.m_proxy));
 	if (lstrlen(szUsername) == 0)
-		wcscpy(whpdata.m_proxyUsername, L"");
+		lstrcpyn(whpdata.m_proxyUsername, L"", sizeof(whpdata.m_proxyUsername));
 	else
-		wcscpy(whpdata.m_proxyUsername, szUsername);
+		lstrcpyn(whpdata.m_proxyUsername, szUsername, sizeof(whpdata.m_proxyUsername));
 
 	if (lstrlen(szPassword) == 0)
-		wcscpy(whpdata.m_proxyPassword, L"");
+		lstrcpyn(whpdata.m_proxyPassword, L"", sizeof(whpdata.m_proxyPassword));
 	else
-		wcscpy(whpdata.m_proxyPassword, szPassword);
+		lstrcpyn(whpdata.m_proxyPassword, szPassword, sizeof(whpdata.m_proxyPassword));
 }
 
 /*
@@ -45,7 +63,7 @@ void WinHttpUtilSetProxy(LPCWSTR szProxyHost, LPCWSTR szUsername, LPCWSTR szPass
 */
 BOOL WinHttpUtilSetUserAgent(LPCWSTR szUserAgent)
 {
-	return (SZ_AGENT = wcsdup(szUserAgent));
+	return (SZ_AGENT = _wcsdup(szUserAgent)) != NULL;
 }
 
 
@@ -96,7 +114,7 @@ LPSTR WinHttpUtilSendRequest(LPCWSTR pstrMethod, LPCWSTR pstrURL, LPCSTR pszPost
 	BOOL bResult = FALSE;
 
 	DWORD dwBufSize = 0;
-	BYTE *pResponse = NULL;
+	CHAR *pResponse = NULL;
 	wchar_t *szStatusCode = NULL;
 	DWORD dwRead = 0;
 	char *pszOut = (char*)malloc(1);
@@ -106,7 +124,7 @@ LPSTR WinHttpUtilSendRequest(LPCWSTR pstrMethod, LPCWSTR pstrURL, LPCSTR pszPost
 	if (lstrlen(pstrURL) <= 0)
 	{
 		whpdata.m_dwLastError = ERROR_PATH_NOT_FOUND;
-		return strdup("ERROR_PATH_NOT_FOUND");
+		return _strdup("ERROR_PATH_NOT_FOUND");
 	}
 
 
@@ -119,7 +137,7 @@ LPSTR WinHttpUtilSendRequest(LPCWSTR pstrMethod, LPCWSTR pstrURL, LPCSTR pszPost
 	{
 		whpdata.m_dwLastError = GetLastError();
 
-		return strdup("m_sessionHandle == NULL");
+		return _strdup("m_sessionHandle == NULL");
 	}
 
 	WinHttpSetTimeouts(m_sessionHandle, whpdata.m_resolveTimeout, whpdata.m_connectTimeout, whpdata.m_sendTimeout, whpdata.m_receiveTimeout);
@@ -179,7 +197,7 @@ LPSTR WinHttpUtilSendRequest(LPCWSTR pstrMethod, LPCWSTR pstrURL, LPCSTR pszPost
 					{
 						memset(&proxyInfo, 0, sizeof(proxyInfo));
 						proxyInfo.dwAccessType = WINHTTP_ACCESS_TYPE_NAMED_PROXY;
-						wcscpy_s(szProxy, MAX_PATH, whpdata.m_proxy);
+						lstrcpyn(szProxy, whpdata.m_proxy, sizeof(szProxy));
 						proxyInfo.lpszProxy = szProxy;
 						if (!WinHttpSetOption(hRequest, WINHTTP_OPTION_PROXY, &proxyInfo, sizeof(proxyInfo)))
 						{
@@ -342,8 +360,8 @@ LPSTR WinHttpUtilSendRequest(LPCWSTR pstrMethod, LPCWSTR pstrURL, LPCSTR pszPost
 								dwSize = 0;
 								if (WinHttpQueryDataAvailable(hRequest, &dwSize))
 								{
-									pResponse = (BYTE *)malloc(sizeof(BYTE)*(dwSize + 1));
-									memset(pResponse, 0, sizeof(BYTE)*(dwSize + 1));
+									pResponse = (CHAR *)malloc(sizeof(CHAR)*(dwSize + 1));
+									memset(pResponse, 0, sizeof(CHAR)*(dwSize + 1));
 									dwRead = 0;
 
 									if (WinHttpReadData(hRequest, pResponse, dwSize, &dwRead))
@@ -357,9 +375,6 @@ LPSTR WinHttpUtilSendRequest(LPCWSTR pstrMethod, LPCWSTR pstrURL, LPCSTR pszPost
 
 										free(pszTmp);
 										pszTmp = NULL;
-										//lstrcpy(output + iCurrentBufferSize, pResponse);
-										//lstrcpyn(output + iCurrentBufferSize, pResponse, dwRead);
-										//memcpy(output + iCurrentBufferSize, pResponse, dwRead);
 
 									}
 									free(pResponse);
