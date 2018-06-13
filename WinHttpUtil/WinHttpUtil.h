@@ -2,9 +2,6 @@
 #define _LC_WIN_HTTP_H
 
 #include <windows.h>
-#include <Winhttp.h>
-
-#pragma comment(lib, "Winhttp.lib")
 
 static const unsigned int INT_RETRYTIMES = 3;
 static wchar_t *SZ_AGENT = L"Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.87 Safari/537.36";
@@ -28,12 +25,12 @@ typedef struct WIN_HTTP_CLIENT
 
 WinHttp whpdata;
 
-void WinHttpInit();
-void SetProxy(LPCWSTR proxyhost, LPCWSTR user, LPCWSTR passwd);
-void SetUserAgent(LPCWSTR szUserAgent);
+void WinHttpUtilInit();
+void WinHttpUtilSetProxy(LPCWSTR szProxyHost, LPCWSTR szUsername, LPCWSTR szPassword);
+BOOL WinHttpUtilSetUserAgent(LPCWSTR szUserAgent);
 
-int getLastError();
-char* SendHttpRequest(LPCWSTR pstrMethod, LPCWSTR pstrURL, LPCSTR pszPostMsg, BOOL bProxy);
+DWORD WinHttpUtilGetLastError();
+LPSTR WinHttpUtilSendRequest(LPCWSTR pstrMethod, LPCWSTR pstrURL, LPCSTR pszPostMsg, BOOL bProxy);
 
 
 #endif

@@ -1,7 +1,12 @@
-﻿#include <stdio.h>
-#include "WinHttpUtil.h"
+﻿#include "WinHttpUtil.h"
 
-void WinHttpInit()
+#include <Winhttp.h>
+#pragma comment(lib, "Winhttp.lib")
+
+/*
+* @Description: 加载基本设置
+*/
+void WinHttpUtilInit()
 {
 	memset(whpdata.m_proxy, '\0', sizeof(whpdata.m_proxy));
 	wcscpy(whpdata.m_userAgent, SZ_AGENT);
@@ -21,25 +26,26 @@ void WinHttpInit()
 * @Description: 设置http请求的代理服务器
 *	例如：“192.168.1.1:1080”
 */
-void SetProxy(LPCWSTR proxyhost, LPCWSTR user, LPCWSTR passwd)
+void WinHttpUtilSetProxy(LPCWSTR szProxyHost, LPCWSTR szUsername, LPCWSTR szPassword)
 {
-	wcscpy(whpdata.m_proxy, proxyhost);
-	if (lstrlen(user) == 0)
+	wcscpy(whpdata.m_proxy, szProxyHost);
+	if (lstrlen(szUsername) == 0)
 		wcscpy(whpdata.m_proxyUsername, L"");
 	else
-		wcscpy(whpdata.m_proxyUsername, user);
+		wcscpy(whpdata.m_proxyUsername, szUsername);
 
-	if (lstrlen(passwd) == 0)
+	if (lstrlen(szPassword) == 0)
 		wcscpy(whpdata.m_proxyPassword, L"");
 	else
-		wcscpy(whpdata.m_proxyPassword, passwd);
+		wcscpy(whpdata.m_proxyPassword, szPassword);
 }
+
 /*
 * @Description: 设置UserAgent
 */
-void SetUserAgent(LPCWSTR szUserAgent)
+BOOL WinHttpUtilSetUserAgent(LPCWSTR szUserAgent)
 {
-	SZ_AGENT = wcsdup(szUserAgent);
+	return (SZ_AGENT = wcsdup(szUserAgent));
 }
 
 
@@ -47,7 +53,7 @@ void SetUserAgent(LPCWSTR szUserAgent)
 * @Description: 返回最后一次错误的错误代码
 *
 */
-int getLastError()
+DWORD WinHttpUtilGetLastError()
 {
 	return whpdata.m_dwLastError;
 }
@@ -60,7 +66,7 @@ int getLastError()
 *	pszPostMsg：要发送的数据
 *	bProxy：是否使用代理，1-使用，0-不使用
 */
-char* SendHttpRequest(LPCWSTR pstrMethod, LPCWSTR pstrURL, LPCSTR pszPostMsg, BOOL bProxy)
+LPSTR WinHttpUtilSendRequest(LPCWSTR pstrMethod, LPCWSTR pstrURL, LPCSTR pszPostMsg, BOOL bProxy)
 {
 	DWORD nPostMsgLen = lstrlenA(pszPostMsg);
 	DWORD dwOpenRequestFlag;
