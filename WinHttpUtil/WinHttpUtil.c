@@ -3,7 +3,7 @@
 #include <Winhttp.h>
 #pragma comment(lib, "Winhttp.lib")
 
-struct WIN_HTTP_CLIENT_
+struct
 {
 	wchar_t m_proxy[MAX_PATH];
 	wchar_t m_proxyUsername[128];
@@ -83,25 +83,24 @@ DWORD WinHttpUtilGetLastError()
 *	pstrURL：请求路径
 *	pszPostMsg：要发送的数据
 *	bProxy：是否使用代理，1-使用，0-不使用
+*   szHeader: 返回头
+*   szCookies: 返回的cookies
+*   szAddHeader: 要添加的请求头
 */
-LPSTR WinHttpUtilSendRequest(LPCWSTR pstrMethod, LPCWSTR pstrURL, LPCSTR pszPostMsg, BOOL bProxy)
+LPSTR WinHttpUtilSendRequest(LPCWSTR pstrMethod, LPCWSTR pstrURL, LPCSTR pszPostMsg, BOOL bProxy, LPWSTR szHeader, LPWSTR szCookies, LPCWSTR szAddHeader)
 {
-	DWORD nPostMsgLen = lstrlenA(pszPostMsg);
-	DWORD dwOpenRequestFlag;
-	DWORD options;
+	DWORD nPostMsgLen = NULL;
+	if (pszPostMsg != NULL) nPostMsgLen = lstrlenA(pszPostMsg);
 
-	HINTERNET m_sessionHandle = NULL;
-	HINTERNET hConnect = NULL;
-	HINTERNET hRequest = NULL;
 
 	wchar_t szHostName[MAX_PATH] = L"";
 	wchar_t szURLPath[MAX_PATH * 4] = L"";
-	URL_COMPONENTS urlComp;
+
 
 	BOOL bGetReponseSucceed = FALSE;
 	DWORD dwRetryTimes = 0;
 
-	wchar_t m_additionalRequestHeaders[10240] = L"";
+	wchar_t szWithHeader[10240] = L"";
 	WINHTTP_PROXY_INFO proxyInfo;
 	wchar_t szProxy[MAX_PATH] = L"";
 
@@ -115,7 +114,8 @@ LPSTR WinHttpUtilSendRequest(LPCWSTR pstrMethod, LPCWSTR pstrURL, LPCSTR pszPost
 
 	DWORD dwBufSize = 0;
 	CHAR *pResponse = NULL;
-	wchar_t *szStatusCode = NULL;
+	LPWSTR szHeaderBuf = NULL;
+	LPWSTR szCookiesBuf = NULL;
 	DWORD dwRead = 0;
 	char *pszOut = (char*)malloc(1);
 
@@ -128,20 +128,17 @@ LPSTR WinHttpUtilSendRequest(LPCWSTR pstrMethod, LPCWSTR pstrURL, LPCSTR pszPost
 	}
 
 
-	m_sessionHandle = WinHttpOpen(whpdata.m_userAgent,
-		WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
-		WINHTTP_NO_PROXY_NAME,
-		WINHTTP_NO_PROXY_BYPASS,
-		0);
-	if (m_sessionHandle == NULL)
+	HINTERNET hSession = WinHttpOpen(whpdata.m_userAgent, WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+	if (hSession == NULL)
 	{
 		whpdata.m_dwLastError = GetLastError();
 
-		return _strdup("m_sessionHandle == NULL");
+		return _strdup("hSession == NULL");
 	}
 
-	WinHttpSetTimeouts(m_sessionHandle, whpdata.m_resolveTimeout, whpdata.m_connectTimeout, whpdata.m_sendTimeout, whpdata.m_receiveTimeout);
+	WinHttpSetTimeouts(hSession, whpdata.m_resolveTimeout, whpdata.m_connectTimeout, whpdata.m_sendTimeout, whpdata.m_receiveTimeout);
 
+	URL_COMPONENTS urlComp;
 	memset(&urlComp, 0, sizeof(urlComp));
 	urlComp.dwStructSize = sizeof(urlComp);
 	urlComp.lpszHostName = szHostName;
@@ -152,17 +149,12 @@ LPSTR WinHttpUtilSendRequest(LPCWSTR pstrMethod, LPCWSTR pstrURL, LPCSTR pszPost
 
 	if (WinHttpCrackUrl(pstrURL, lstrlen(pstrURL), 0, &urlComp))
 	{
-		hConnect = WinHttpConnect(m_sessionHandle, szHostName, urlComp.nPort, 0);
+		HINTERNET hConnect = WinHttpConnect(hSession, szHostName, urlComp.nPort, 0);
 		if (hConnect != NULL)
 		{
-			dwOpenRequestFlag = (urlComp.nScheme == INTERNET_SCHEME_HTTPS) ? WINHTTP_FLAG_SECURE : 0;
-			hRequest = WinHttpOpenRequest(hConnect,
-				pstrMethod,
-				urlComp.lpszUrlPath,
-				NULL,
-				WINHTTP_NO_REFERER,
-				WINHTTP_DEFAULT_ACCEPT_TYPES,
-				dwOpenRequestFlag);
+			DWORD dwOpenRequestFlag = (urlComp.nScheme == INTERNET_SCHEME_HTTPS) ? WINHTTP_FLAG_SECURE : 0;
+
+			HINTERNET hRequest = WinHttpOpenRequest(hConnect, pstrMethod, urlComp.lpszUrlPath, NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, dwOpenRequestFlag);
 
 			if (hRequest != NULL)
 			{
@@ -170,25 +162,28 @@ LPSTR WinHttpUtilSendRequest(LPCWSTR pstrMethod, LPCWSTR pstrURL, LPCSTR pszPost
 				// Easiest to accept anything for now
 				if (!whpdata.m_requireValidSsl && urlComp.nScheme == INTERNET_SCHEME_HTTPS)
 				{
-					options = SECURITY_FLAG_IGNORE_CERT_CN_INVALID | SECURITY_FLAG_IGNORE_CERT_DATE_INVALID | SECURITY_FLAG_IGNORE_UNKNOWN_CA;
+					DWORD dwOptions = SECURITY_FLAG_IGNORE_CERT_CN_INVALID | SECURITY_FLAG_IGNORE_CERT_DATE_INVALID | SECURITY_FLAG_IGNORE_UNKNOWN_CA;
+					WinHttpSetOption(hRequest, WINHTTP_OPTION_SECURITY_FLAGS, (LPVOID)&dwOptions, sizeof(DWORD));
 
-					WinHttpSetOption(hRequest,
-						WINHTTP_OPTION_SECURITY_FLAGS,
-						(LPVOID)&options,
-						sizeof(DWORD));
 				}
 
+				DWORD dwOptions = WINHTTP_DISABLE_REDIRECTS; //禁止重定向
+				WinHttpSetOption(hRequest, WINHTTP_OPTION_DISABLE_FEATURE, (LPVOID)&dwOptions, sizeof(DWORD));
 				//发送请求失败时，多尝试几次
 				while (!bGetReponseSucceed && dwRetryTimes++ < INT_RETRYTIMES)
 				{
-					m_additionalRequestHeaders[0] = 0;
+					szWithHeader[0] = 0;
 					// memcpy(hdsize,&nPostMsgLen,sizeof(int));
 
-					if (nPostMsgLen > 0) wsprintf(m_additionalRequestHeaders, L"%sContent-Length: %d\r\n", m_additionalRequestHeaders, nPostMsgLen);
+					if (nPostMsgLen > 0) wsprintf(szWithHeader, L"Content-Length: %d\r\n", nPostMsgLen);
 
-					lstrcat(m_additionalRequestHeaders, L"Content-Type: application/x-www-form-urlencoded\r\n");
+					lstrcat(szWithHeader, L"Content-Type: application/x-www-form-urlencoded\r\n");
 
-					if (!WinHttpAddRequestHeaders(hRequest, m_additionalRequestHeaders, lstrlen(m_additionalRequestHeaders), WINHTTP_ADDREQ_FLAG_COALESCE_WITH_SEMICOLON))
+					if (szAddHeader != NULL) lstrcat(szWithHeader, szAddHeader);
+
+					lstrcat(szWithHeader, L"\r\n");
+
+					if (!WinHttpAddRequestHeaders(hRequest, szWithHeader, lstrlen(szWithHeader), WINHTTP_ADDREQ_FLAG_COALESCE_WITH_SEMICOLON))
 					{
 						whpdata.m_dwLastError = GetLastError();
 					}
@@ -220,13 +215,7 @@ LPSTR WinHttpUtilSendRequest(LPCWSTR pstrMethod, LPCWSTR pstrURL, LPCSTR pszPost
 
 					}
 
-					if (WinHttpSendRequest(hRequest,
-						WINHTTP_NO_ADDITIONAL_HEADERS,
-						0,
-						WINHTTP_NO_REQUEST_DATA,
-						0,
-						0,
-						NULL))
+					if (WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, NULL))
 					{
 						bSendRequestSucceed = TRUE;
 					}
@@ -248,17 +237,11 @@ LPSTR WinHttpUtilSendRequest(LPCWSTR pstrMethod, LPCWSTR pstrURL, LPCSTR pszPost
 
 								memset(&proxyInfo, 0, sizeof(proxyInfo));
 
-								if (WinHttpGetProxyForUrl(m_sessionHandle, pstrURL, &autoProxyOptions, &proxyInfo))
+								if (WinHttpGetProxyForUrl(hSession, pstrURL, &autoProxyOptions, &proxyInfo))
 								{
 									if (WinHttpSetOption(hRequest, WINHTTP_OPTION_PROXY, &proxyInfo, sizeof(proxyInfo)))
 									{
-										if (WinHttpSendRequest(hRequest,
-											WINHTTP_NO_ADDITIONAL_HEADERS,
-											0,
-											WINHTTP_NO_REQUEST_DATA,
-											0,
-											0,
-											NULL))
+										if (WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, NULL))
 										{
 											bSendRequestSucceed = TRUE;
 										}
@@ -319,10 +302,7 @@ LPSTR WinHttpUtilSendRequest(LPCWSTR pstrMethod, LPCWSTR pstrURL, LPCSTR pszPost
 					{
 						if (nPostMsgLen > 0)
 						{
-							if (!WinHttpWriteData(hRequest,
-								pszPostMsg,
-								nPostMsgLen,
-								&dwWritten))
+							if (!WinHttpWriteData(hRequest, pszPostMsg, nPostMsgLen, &dwWritten))
 							{
 								whpdata.m_dwLastError = GetLastError();
 							}
@@ -330,29 +310,39 @@ LPSTR WinHttpUtilSendRequest(LPCWSTR pstrMethod, LPCWSTR pstrURL, LPCSTR pszPost
 						if (WinHttpReceiveResponse(hRequest, NULL))
 						{
 							dwSize = 0;
-							bResult = WinHttpQueryHeaders(hRequest,
-								WINHTTP_QUERY_STATUS_CODE,
-								WINHTTP_HEADER_NAME_BY_INDEX,
-								NULL,
-								&dwSize,
-								WINHTTP_NO_HEADER_INDEX);
+							bResult = WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_RAW_HEADERS_CRLF, WINHTTP_HEADER_NAME_BY_INDEX, NULL, &dwSize, WINHTTP_NO_HEADER_INDEX);
 
 							if (bResult || (!bResult && (GetLastError() == ERROR_INSUFFICIENT_BUFFER)))
 							{
-								szStatusCode = (wchar_t*)malloc(sizeof(wchar_t)*dwSize);
-								memset(szStatusCode, 0, sizeof(wchar_t)*dwSize);
+								szHeaderBuf = (wchar_t*)malloc(sizeof(wchar_t)*dwSize);
+								ZeroMemory(szHeaderBuf, dwSize * sizeof(wchar_t));
 
-								memset(szStatusCode, 0, dwSize * sizeof(wchar_t));
-
-								WinHttpQueryHeaders(hRequest,
-									WINHTTP_QUERY_STATUS_CODE,
-									WINHTTP_HEADER_NAME_BY_INDEX,
-									szStatusCode,
-									&dwSize,
-									WINHTTP_NO_HEADER_INDEX);
-
-
+								WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_RAW_HEADERS_CRLF, WINHTTP_HEADER_NAME_BY_INDEX, szHeaderBuf, &dwSize, WINHTTP_NO_HEADER_INDEX);
+								if (szHeader != NULL) lstrcpyn(szHeader, szHeaderBuf, dwSize);
 							}
+
+							if (szCookies != NULL)
+							{
+								lstrcpy(szCookies, L"Cookie:");
+								LPCWSTR SETCOOKIES = L"Set-Cookie:";
+								DWORD dwSlen = lstrlen(SETCOOKIES);
+								LPWSTR lpFindHead = wcsstr(szHeaderBuf, SETCOOKIES);
+								while (lpFindHead != NULL)
+								{
+									LPWSTR lpFindEnd = wcsstr(lpFindHead + dwSlen, L";");
+									lpFindEnd[0] = 0; // 切断
+									if (lpFindEnd != NULL)
+									{
+										lstrcat(szCookies, lpFindHead + dwSlen);
+										lstrcat(szCookies, L";");
+									}
+									else {
+										break;
+									}
+									lpFindHead = wcsstr(lpFindEnd + 1, SETCOOKIES);
+								}
+							}
+
 
 							pszOut[0] = 0;
 							do
@@ -384,8 +374,10 @@ LPSTR WinHttpUtilSendRequest(LPCWSTR pstrMethod, LPCWSTR pstrURL, LPCSTR pszPost
 
 							bGetReponseSucceed = TRUE;
 
-							free(szStatusCode);
-							szStatusCode = NULL;
+							free(szHeaderBuf);
+							szHeaderBuf = NULL;
+							free(szCookiesBuf);
+							szCookiesBuf = NULL;
 						}
 
 					}
@@ -397,7 +389,7 @@ LPSTR WinHttpUtilSendRequest(LPCWSTR pstrMethod, LPCWSTR pstrURL, LPCSTR pszPost
 			WinHttpCloseHandle(hConnect);
 		}
 	}
-	WinHttpCloseHandle(m_sessionHandle);
+	WinHttpCloseHandle(hSession);
 
 	return pszOut;
 }

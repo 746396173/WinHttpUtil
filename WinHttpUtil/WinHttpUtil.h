@@ -11,7 +11,7 @@ void WinHttpUtilSetProxy(LPCWSTR szProxyHost, LPCWSTR szUsername, LPCWSTR szPass
 BOOL WinHttpUtilSetUserAgent(LPCWSTR szUserAgent);
 
 DWORD WinHttpUtilGetLastError();
-LPSTR WinHttpUtilSendRequest(LPCWSTR pstrMethod, LPCWSTR pstrURL, LPCSTR pszPostMsg, BOOL bProxy);
+LPSTR WinHttpUtilSendRequest(LPCWSTR pstrMethod, LPCWSTR pstrURL, LPCSTR pszPostMsg, BOOL bProxy, LPWSTR szHeader, LPWSTR szCookies, LPCWSTR szAddHeader);
 
 
 #endif

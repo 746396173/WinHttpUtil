@@ -28,7 +28,7 @@ int main()
 
 	//recvlen = WinHttpUtilSendRequest(L"POST", server2, (UCHAR*)pszPostData, strlen(server2) + 1, recv, TRUE);
 
-	printf("%s\n", WinHttpUtilSendRequest(L"GET", httpsurl, "", 0));
+	printf("%s\n", WinHttpUtilSendRequest(L"GET", httpsurl, NULL, 0, NULL, NULL, NULL));
 	//printf("%s\n", WinHttpUtilSendRequest(L"POST", httpsurl, pszPostData, 0));
 	getchar();
 	return 0;
