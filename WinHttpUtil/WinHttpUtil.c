@@ -9,7 +9,6 @@ struct
 	wchar_t m_proxyUsername[128];
 	wchar_t m_proxyPassword[128];
 
-	wchar_t m_userAgent[512];
 	DWORD m_dwLastError;
 	BOOL m_requireValidSsl;
 
@@ -27,7 +26,6 @@ struct
 void WinHttpUtilInit()
 {
 	memset(whpdata.m_proxy, '\0', sizeof(whpdata.m_proxy));
-	lstrcpyn(whpdata.m_userAgent, SZ_AGENT, sizeof(whpdata.m_userAgent));
 	lstrcpyn(whpdata.m_proxyUsername, L"", sizeof(whpdata.m_proxyUsername));
 	lstrcpyn(whpdata.m_proxyPassword, L"", sizeof(whpdata.m_proxyPassword));
 
@@ -63,7 +61,7 @@ void WinHttpUtilSetProxy(LPCWSTR szProxyHost, LPCWSTR szUsername, LPCWSTR szPass
 */
 BOOL WinHttpUtilSetUserAgent(LPCWSTR szUserAgent)
 {
-	return (SZ_AGENT = _wcsdup(szUserAgent)) != NULL;
+	return (BOOL)(lstrcpyn(SZ_AGENT, szUserAgent, 256) != NULL);
 }
 
 
@@ -128,7 +126,7 @@ LPSTR WinHttpUtilSendRequest(LPCWSTR pstrMethod, LPCWSTR pstrURL, LPCSTR pszPost
 	}
 
 
-	HINTERNET hSession = WinHttpOpen(whpdata.m_userAgent, WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+	HINTERNET hSession = WinHttpOpen(SZ_AGENT, WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
 	if (hSession == NULL)
 	{
 		whpdata.m_dwLastError = GetLastError();
